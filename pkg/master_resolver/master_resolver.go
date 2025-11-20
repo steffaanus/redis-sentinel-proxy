@@ -15,7 +15,7 @@ import (
 
 type RedisMasterResolver struct {
 	masterName               string
-	sentinelAddr             *net.TCPAddr
+	sentinelAddr             string
 	sentinelPassword         string
 	retryOnMasterResolveFail int
 
@@ -25,7 +25,7 @@ type RedisMasterResolver struct {
 	masterAddr string
 }
 
-func NewRedisMasterResolver(masterName string, sentinelAddr *net.TCPAddr, sentinelPassword string, retryOnMasterResolveFail int) *RedisMasterResolver {
+func NewRedisMasterResolver(masterName string, sentinelAddr string, sentinelPassword string, retryOnMasterResolveFail int) *RedisMasterResolver {
 	return &RedisMasterResolver{
 		masterName:               masterName,
 		sentinelAddr:             sentinelAddr,
@@ -91,8 +91,8 @@ func (r *RedisMasterResolver) initialMasterAddressResolve() error {
 	return r.updateMasterAddress()
 }
 
-func redisMasterFromSentinelAddr(sentinelAddress *net.TCPAddr, sentinelPassword string, masterName string) (*net.TCPAddr, error) {
-	conn, err := utils.TCPConnectWithTimeout(sentinelAddress.String())
+func redisMasterFromSentinelAddr(sentinelAddress string, sentinelPassword string, masterName string) (*net.TCPAddr, error) {
+	conn, err := utils.TCPConnectWithTimeout(sentinelAddress)
 	if err != nil {
 		return nil, fmt.Errorf("error connecting to sentinel: %w", err)
 	}

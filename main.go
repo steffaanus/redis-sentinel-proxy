@@ -45,9 +45,8 @@ func runProxying(localAddr, sentinelAddr, password string, masterName string, ma
 	defer cancel()
 
 	laddr := resolveTCPAddr(localAddr)
-	saddr := resolveTCPAddr(sentinelAddr)
 
-	masterAddrResolver := masterresolver.NewRedisMasterResolver(masterName, saddr, password, masterResolveRetries)
+	masterAddrResolver := masterresolver.NewRedisMasterResolver(masterName, sentinelAddr, password, masterResolveRetries)
 	rsp := proxy.NewRedisSentinelProxy(laddr, masterAddrResolver)
 
 	eg, ctx := errgroup.WithContext(ctx)

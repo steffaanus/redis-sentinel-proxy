@@ -8,15 +8,18 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 )
 
 func Test_redisMasterFromSentinelAddr(t *testing.T) {
 	type args struct {
-		sentinelAddress *net.TCPAddr
-		masterName      string
+		sentinelAddress  string
+		sentinelPassword string
+		masterName       string
 	}
 
 	mockServerAddr := &net.TCPAddr{IP: net.IPv4(0, 0, 0, 0), Port: 12700}
+	expectedMasterAddr := &net.TCPAddr{IP: net.IPv4(127, 0, 0, 1), Port: 12700}
 	tests := []struct {
 		name    string
 		args    args
@@ -25,27 +28,32 @@ func Test_redisMasterFromSentinelAddr(t *testing.T) {
 	}{
 		{
 			name: "all is ok",
-			want: mockServerAddr,
+			want: expectedMasterAddr,
 			args: args{
-				sentinelAddress: &net.TCPAddr{IP: net.IPv4(127, 0, 0, 1), Port: 12700},
-				masterName:      "test-master",
+				sentinelAddress:  "127.0.0.1:12700",
+				sentinelPassword: "",
+				masterName:       "test-master",
 			},
 		},
 		{
 			name:    "fail with error",
 			wantErr: true,
 			args: args{
-				sentinelAddress: mockServerAddr,
-				masterName:      "bad-master",
+				sentinelAddress:  "0.0.0.0:12700",
+				sentinelPassword: "",
+				masterName:       "bad-master",
 			},
 		},
 	}
 
 	go mockSentinelServer(mockServerAddr)
 
+	// Give the mock server time to start
+	time.Sleep(100 * time.Millisecond)
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := redisMasterFromSentinelAddr(tt.args.sentinelAddress, tt.args.masterName)
+			got, err := redisMasterFromSentinelAddr(tt.args.sentinelAddress, tt.args.sentinelPassword, tt.args.masterName)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("redisMasterFromSentinelAddr() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -80,10 +88,12 @@ func testAccept(conn net.Conn, addr *net.TCPAddr) {
 	}
 
 	var masterAddr string
-	if bytes.HasPrefix(out, []byte("sentinel get-master-addr-by-name test-master")) {
-		masterAddr = strings.Join([]string{"tralala", "tralala", addr.IP.String(), "tralala", strconv.Itoa(addr.Port)}, "\r\n")
+	// Check for uppercase SENTINEL command (as sent by the actual code)
+	if bytes.Contains(out, []byte("SENTINEL get-master-addr-by-name test-master")) {
+		// Return 127.0.0.1 instead of 0.0.0.0 so the connection check succeeds
+		masterAddr = strings.Join([]string{"*2", "$" + strconv.Itoa(len("127.0.0.1")), "127.0.0.1", "$" + strconv.Itoa(len(strconv.Itoa(addr.Port))), strconv.Itoa(addr.Port)}, "\r\n")
 	} else {
-		masterAddr = strings.Join([]string{"tralala", "tralala", addr.IP.String(), "tralala", "40"}, "\r\n")
+		masterAddr = strings.Join([]string{"*2", "$" + strconv.Itoa(len(addr.IP.String())), addr.IP.String(), "$2", "40"}, "\r\n")
 	}
 
 	if _, err := conn.Write([]byte(masterAddr)); err != nil {
